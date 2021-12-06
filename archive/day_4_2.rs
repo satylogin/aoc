@@ -19,7 +19,6 @@ fn mark(board: &mut Vec<Vec<Option<usize>>>, num: usize) {
 fn main() {
     let f = std::fs::File::open("input.txt").unwrap();
     let reader = std::io::BufReader::new(f);
-
     let mut iter = reader.lines().enumerate();
 
     let nums = iter
@@ -53,19 +52,27 @@ fn main() {
         boards.push(board);
     }
 
+    let mut n_boards = boards.len();
     for num in nums {
         let num = num.unwrap();
-        for board in &mut boards {
-            mark(board, num);
-            if has_won(board) {
+        let mut unwon_boards = vec![];
+        for mut board in boards {
+            mark(&mut board, num);
+            if has_won(&board) {
                 // calc
                 let total: usize = board
                     .iter()
                     .map(|r| r.iter().map(|e| e.unwrap_or(0)).sum::<usize>())
                     .sum();
-                println!("{}", total * num);
-                return;
+                n_boards -= 1;
+                if n_boards == 0 {
+                    println!("{}", total * num);
+                    return;
+                }
+            } else {
+                unwon_boards.push(board);
             }
         }
+        boards = unwon_boards;
     }
 }
