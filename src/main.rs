@@ -30,45 +30,43 @@ fn missing(req: &Vec<char>, has: &Vec<char>) -> Vec<char> {
         .collect()
 }
 
-fn generate_signal(nos: &mut Vec<&str>) -> Vec<char> {
-    let mut signal = vec!['a'; 7];
+fn generate_wiring(signals: &mut Vec<&str>) -> Vec<char> {
+    let mut wiring = vec!['0'; 7];
 
     let mut freq: HashMap<char, usize> = "abcdefg".chars().map(|c| (c, 0)).collect();
-    nos.into_iter().for_each(|n| {
+    signals.into_iter().for_each(|n| {
         n.chars().for_each(|c| {
             *freq.get_mut(&c).unwrap() += 1;
         });
     });
     freq.iter().for_each(|(c, f)| match *f {
-        9 => signal[4] = *c,
-        6 => signal[3] = *c,
-        4 => signal[6] = *c,
+        9 => wiring[4] = *c,
+        6 => wiring[3] = *c,
+        4 => wiring[6] = *c,
         _ => {}
     });
-    nos.sort_by(|a, b| a.len().cmp(&b.len()));
-    signal[1] = missing(&(nos[0].chars().collect()), &vec![signal[4]])[0];
-    signal[0] = missing(&(nos[1].chars().collect()), &vec![signal[1], signal[4]])[0];
-    signal[2] = missing(
-        &(nos[2].chars().collect()),
-        &vec![signal[1], signal[3], signal[4]],
+
+    signals.sort_by(|a, b| a.len().cmp(&b.len()));
+    wiring[1] = missing(&(signals[0].chars().collect()), &vec![wiring[4]])[0];
+    wiring[0] = missing(&(signals[1].chars().collect()), &vec![wiring[1], wiring[4]])[0];
+    wiring[2] = missing(
+        &(signals[2].chars().collect()),
+        &vec![wiring[1], wiring[3], wiring[4]],
     )[0];
-    signal[5] = signal[0];
-    signal[5] = missing(&(nos[9].chars().collect()), &(signal.clone()))[0];
-    signal
+    wiring[5] = missing(&(signals[9].chars().collect()), &(wiring.clone()))[0];
+
+    wiring
 }
 
 fn main() {
     let data = std::fs::read_to_string("input.txt").unwrap();
-    let lines: Vec<&str> = data.split('\n').filter(|l| l.len() > 0).collect();
-    let s = lines
-        .into_iter()
-        .map(|line| {
-            let mut splitter = line.split('|');
-            let numbers = splitter.next().unwrap().split(' ').filter(|c| c.len() > 0);
-            let mapping = signal_to_digit(generate_signal(&mut numbers.collect::<Vec<_>>()));
-            let output = splitter.next().unwrap().split(' ').filter(|o| o.len() > 0);
-            output.fold(0, |num, n| num * 10 + mapping[&sort(n)])
-        })
-        .sum::<usize>();
-    println!("{}", s);
+    let lines = data.split('\n').filter(|l| l.len() > 0);
+    let resolved = lines.map(|line| {
+        let mut splitter = line.split('|');
+        let numbers = splitter.next().unwrap().split(' ').filter(|c| c.len() > 0);
+        let output = splitter.next().unwrap().split(' ').filter(|o| o.len() > 0);
+        let std = signal_to_digit(generate_wiring(&mut numbers.collect::<Vec<_>>()));
+        output.fold(0, |num, n| num * 10 + std[&sort(n)])
+    });
+    println!("{}", resolved.sum::<usize>());
 }
