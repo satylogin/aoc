@@ -1,77 +1,45 @@
+use std::collections::{BTreeMap, BTreeSet};
+
+struct Graph<'l> {
+    children: BTreeMap<&'l str, BTreeSet<&'l str>>,
+}
+
+impl<'l> Graph<'l> {
+    fn count_paths(&self, node: &str, visited: &mut BTreeSet<&'l str>, budget: bool) -> usize {
+        if node == "end" {
+            return 1;
+        }
+        let mut paths = 0;
+        for &child in &self.children[node] {
+            if child.chars().all(char::is_uppercase) {
+                paths += self.count_paths(child, visited, budget);
+            } else if !visited.contains(child) {
+                visited.insert(child);
+                paths += self.count_paths(child, visited, budget);
+                visited.remove(child);
+            } else if child != "start" && budget {
+                paths += self.count_paths(child, visited, false);
+            }
+        }
+        paths
+    }
+}
+
 fn main() {
-    let data = std::fs::read_to_string("input.txt").unwrap();
-    let mut lines = data.split('\n');
+    let now = std::time::Instant::now();
+    let data: String = std::fs::read_to_string("input.txt").unwrap();
 
-    let mut grid = vec![vec!['.'; 2000]; 2000];
-    while let Some(line) = lines.next() {
-        if line.is_empty() {
-            break;
-        }
-        let mut splitter = line.split(',');
-        let x = splitter.next().unwrap().parse::<usize>().unwrap();
-        let y = splitter.next().unwrap().parse::<usize>().unwrap();
-        grid[y][x] = '#';
-    }
-
-    while let Some(line) = lines.next() {
-        if line.is_empty() {
-            continue;
-        }
-        let action = line.split(' ').nth(2).unwrap();
-        let mut splitter = action.split('=');
-        let axis = splitter.next().unwrap();
-        let point = splitter.next().unwrap().parse::<usize>().unwrap();
-        if axis == "x" {
-            (0..2000).for_each(|i| grid[i][point] = '|');
-            if point == 0 || point == 1999 {
-                continue;
-            }
-            let mut a = point - 1;
-            let mut b = point + 1;
-            loop {
-                (0..2000).for_each(|i| {
-                    if grid[i][b] == '#' {
-                        grid[i][a] = '#';
-                    }
-                    grid[i][b] = '.';
-                });
-                if a == 0 || b == 1999 {
-                    break;
-                }
-                a -= 1;
-                b += 1;
-            }
-        } else {
-            (0..2000).for_each(|j| grid[point][j] = '-');
-            if point == 0 || point == 1999 {
-                continue;
-            }
-            let mut a = point - 1;
-            let mut b = point + 1;
-            loop {
-                (0..2000).for_each(|j| {
-                    if grid[b][j] == '#' {
-                        grid[a][j] = '#';
-                    }
-                    grid[b][j] = '.';
-                });
-                if a == 0 || b == 1999 {
-                    break;
-                }
-                a -= 1;
-                b += 1;
-            }
-        }
-        let cnt = grid
-            .iter()
-            .map(|row| row.iter().map(|p| (*p == '#') as usize).sum::<usize>())
-            .sum::<usize>();
-        println!("count = {}", cnt);
-        for i in 0..50 {
-            for j in 0..50 {
-                print!("{} ", grid[i][j]);
-            }
-            println!();
-        }
-    }
+    let mut children = BTreeMap::new();
+    data.split('\n').filter(|l| !l.is_empty()).for_each(|l| {
+        let mut splitter = l.split('-');
+        let a = splitter.next().unwrap();
+        let b = splitter.next().unwrap();
+        children.entry(a).or_insert(BTreeSet::new()).insert(b);
+        children.entry(b).or_insert(BTreeSet::new()).insert(a);
+    });
+    let mut visited = BTreeSet::new();
+    visited.insert("start");
+    let traverse = Graph { children };
+    println!("{}", traverse.count_paths("start", &mut visited, true));
+    println!("elapsed: {}", now.elapsed().as_millis());
 }

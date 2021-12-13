@@ -1,38 +1,35 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-struct Traverse<'l> {
+struct Graph<'l> {
     children: BTreeMap<&'l str, BTreeSet<&'l str>>,
-    visited: BTreeSet<&'l str>,
-    special: bool,
-    paths: usize,
 }
 
-impl<'l> Traverse<'l> {
-    fn traverse(&mut self, node: &str) {
+impl<'l> Graph<'l> {
+    fn count_paths(&self, node: &str, visited: &mut BTreeSet<&'l str>, budget: bool) -> usize {
         if node == "end" {
-            self.paths += 1;
-            return;
+            return 1;
         }
-        for child in self.children[node].clone() {
+        let mut paths = 0;
+        for &child in &self.children[node] {
             if child.chars().all(char::is_uppercase) {
-                self.traverse(child);
-            } else if !self.visited.contains(child) {
-                self.visited.insert(child);
-                self.traverse(child);
-                self.visited.remove(child);
-            } else if child != "start" && !self.special {
-                self.special = true;
-                self.traverse(child);
-                self.special = false;
+                paths += self.count_paths(child, visited, budget);
+            } else if !visited.contains(child) {
+                visited.insert(child);
+                paths += self.count_paths(child, visited, budget);
+                visited.remove(child);
+            } else if child != "start" && budget {
+                paths += self.count_paths(child, visited, false);
             }
         }
+        paths
     }
 }
 
 fn main() {
-    let mut children = BTreeMap::new();
+    let now = std::time::Instant::now();
     let data: String = std::fs::read_to_string("input.txt").unwrap();
 
+    let mut children = BTreeMap::new();
     data.split('\n').filter(|l| !l.is_empty()).for_each(|l| {
         let mut splitter = l.split('-');
         let a = splitter.next().unwrap();
@@ -42,12 +39,7 @@ fn main() {
     });
     let mut visited = BTreeSet::new();
     visited.insert("start");
-    let mut traverse = Traverse {
-        children,
-        visited,
-        special: false,
-        paths: 0,
-    };
-    traverse.traverse("start");
-    println!("{}", traverse.paths);
+    let traverse = Graph { children };
+    println!("{}", traverse.count_paths("start", &mut visited, true));
+    println!("elapsed: {}", now.elapsed().as_millis());
 }
