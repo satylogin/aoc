@@ -1,53 +1,66 @@
-use std::collections::BTreeMap;
+#![feature(test)]
 
-fn freq_map() -> BTreeMap<String, usize> {
-    let chars = (0..26).map(|i| ('A' as u8 + i) as char).collect::<Vec<_>>();
-    chars
-        .iter()
-        .flat_map(|c1| chars.iter().map(move |c2| (format!("{}{}", c1, c2), 0)))
+use std::collections::HashMap;
+
+fn freq_map() -> HashMap<(u8, u8), usize> {
+    (0..26)
+        .flat_map(|a| (0..26).map(move |b| ((a + 'A' as u8, b + 'A' as u8), 0)))
         .collect()
 }
 
 fn main() {
-    let start_instant = std::time::Instant::now();
     let data = std::fs::read_to_string("input.txt").unwrap();
     let mut lines = data.split('\n').filter(|l| !l.is_empty());
 
-    let polymer = lines.next().unwrap().to_string();
+    let poly = lines.next().unwrap().bytes().collect::<Vec<_>>();
     let conversions = lines
         .map(|l| {
-            let parts = l.split("->").map(|w| w.trim()).collect::<Vec<_>>();
-            (parts[0], parts[1])
+            let (p, s) = l.split_once(" -> ").unwrap();
+            let left = p.bytes().collect::<Vec<_>>();
+            ((left[0], left[1]), s.bytes().next().unwrap())
         })
-        .collect::<BTreeMap<_, _>>();
+        .collect::<HashMap<_, _>>();
     let mut freq = freq_map();
-    (0..polymer.len() - 1).for_each(|i| *freq.get_mut(&polymer[i..i + 2]).unwrap() += 1);
+    poly.windows(2)
+        .for_each(|w| *freq.get_mut(&(w[0], w[1])).unwrap() += 1);
+
+    let mut new_freq = freq_map();
     for _ in 0..40 {
-        let mut new_freq = freq_map();
+        new_freq.iter_mut().for_each(|(_, v)| *v = 0);
         for (k, v) in freq.iter() {
-            if let Some(c) = conversions.get(k.as_str()) {
-                let k1 = format!("{}{}", k.chars().nth(0).unwrap(), c);
-                let k2 = format!("{}{}", c, k.chars().nth(1).unwrap());
-                *new_freq.get_mut(&k1).unwrap() += v;
-                *new_freq.get_mut(&k2).unwrap() += v;
+            if let Some(&c) = conversions.get(k) {
+                *new_freq.get_mut(&(k.0, c)).unwrap() += v;
+                *new_freq.get_mut(&(c, k.1)).unwrap() += v;
             } else {
-                *new_freq.get_mut(k.as_str()).unwrap() += v;
+                *new_freq.get_mut(k).unwrap() += v;
             }
         }
-        freq = new_freq;
+        std::mem::swap(&mut freq, &mut new_freq);
     }
 
-    let mut f = BTreeMap::new();
+    let mut f = HashMap::new();
     for (k, v) in freq {
-        *f.entry(k.chars().nth(0).unwrap()).or_insert(0) += v;
-        *f.entry(k.chars().nth(1).unwrap()).or_insert(0) += v;
+        *f.entry(k.0).or_insert(0) += v;
+        *f.entry(k.1).or_insert(0) += v;
     }
     let mut vals = f
         .into_iter()
         .map(|(_, v)| if v & 1 == 1 { v / 2 + 1 } else { v / 2 })
         .filter(|v| *v != 0)
         .collect::<Vec<_>>();
-    vals.sort();
+    vals.sort_unstable();
     println!("{}", vals[vals.len() - 1] - vals[0]);
-    println!("elapsed: {}", start_instant.elapsed().as_micros());
+}
+
+extern crate test;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_run(b: &mut Bencher) {
+        b.iter(|| main());
+    }
 }
