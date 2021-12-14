@@ -2,17 +2,33 @@
 
 use std::collections::HashMap;
 
-fn freq_map() -> HashMap<(u8, u8), usize> {
-    (0..26)
-        .flat_map(|a| (0..26).map(move |b| ((a + 'A' as u8, b + 'A' as u8), 0)))
-        .collect()
+fn freq_map(data: &str) -> HashMap<(u8, u8), usize> {
+    let mut chars = data
+        .bytes()
+        .filter(|c| *c >= 'A' as u8 && *c <= 'Z' as u8)
+        .collect::<Vec<_>>();
+    chars.sort_unstable();
+    chars.dedup();
+    let mut freq = HashMap::new();
+    for i in 0..chars.len() {
+        for j in 0..chars.len() {
+            freq.insert((chars[i], chars[j]), 0);
+        }
+    }
+    freq
 }
 
 fn main() {
     let data = std::fs::read_to_string("input.txt").unwrap();
     let mut lines = data.split('\n').filter(|l| !l.is_empty());
 
+    let mut freq = freq_map(&data);
+    let mut new_freq = freq.clone();
+
     let poly = lines.next().unwrap().bytes().collect::<Vec<_>>();
+    poly.windows(2)
+        .for_each(|w| *freq.get_mut(&(w[0], w[1])).unwrap() += 1);
+
     let conversions = lines
         .map(|l| {
             let (p, s) = l.split_once(" -> ").unwrap();
@@ -20,11 +36,7 @@ fn main() {
             ((left[0], left[1]), s.bytes().next().unwrap())
         })
         .collect::<HashMap<_, _>>();
-    let mut freq = freq_map();
-    poly.windows(2)
-        .for_each(|w| *freq.get_mut(&(w[0], w[1])).unwrap() += 1);
 
-    let mut new_freq = freq_map();
     for _ in 0..40 {
         new_freq.iter_mut().for_each(|(_, v)| *v = 0);
         for (k, v) in freq.iter() {
