@@ -1,35 +1,27 @@
 use std::collections::BTreeMap;
 
 fn freq_map() -> BTreeMap<String, usize> {
-    let mut freq: BTreeMap<String, usize> = BTreeMap::new();
-    for i in 0..26 {
-        for j in 0..26 {
-            freq.insert(
-                format!("{}{}", ('A' as u8 + i) as char, ('A' as u8 + j) as char),
-                0,
-            );
-        }
-    }
-    freq
+    let chars = (0..26).map(|i| ('A' as u8 + i) as char).collect::<Vec<_>>();
+    chars
+        .iter()
+        .flat_map(|c1| chars.iter().map(move |c2| (format!("{}{}", c1, c2), 0)))
+        .collect()
 }
 
 fn main() {
+    let start_instant = std::time::Instant::now();
     let data = std::fs::read_to_string("input.txt").unwrap();
     let mut lines = data.split('\n').filter(|l| !l.is_empty());
 
     let polymer = lines.next().unwrap().to_string();
     let conversions = lines
         .map(|l| {
-            let mut splitter = l.split("->");
-            let base = splitter.next().unwrap().trim();
-            let to = splitter.next().unwrap().trim();
-            (base, to)
+            let parts = l.split("->").map(|w| w.trim()).collect::<Vec<_>>();
+            (parts[0], parts[1])
         })
         .collect::<BTreeMap<_, _>>();
     let mut freq = freq_map();
-    for i in 0..polymer.len() - 1 {
-        *freq.get_mut(&polymer[i..=i + 1]).unwrap() += 1;
-    }
+    (0..polymer.len() - 1).for_each(|i| *freq.get_mut(&polymer[i..i + 2]).unwrap() += 1);
     for _ in 0..40 {
         let mut new_freq = freq_map();
         for (k, v) in freq.iter() {
@@ -47,23 +39,15 @@ fn main() {
 
     let mut f = BTreeMap::new();
     for (k, v) in freq {
-        let k = k.chars().collect::<Vec<_>>();
-        *f.entry(k[0]).or_insert(0) += v;
-        *f.entry(k[1]).or_insert(0) += v;
-    }
-    for (_, v) in &mut f {
-        if (*v) & 1 == 1 {
-            *v = *v / 2 + 1;
-        } else {
-            *v = *v / 2;
-        }
+        *f.entry(k.chars().nth(0).unwrap()).or_insert(0) += v;
+        *f.entry(k.chars().nth(1).unwrap()).or_insert(0) += v;
     }
     let mut vals = f
         .into_iter()
-        .map(|(_, v)| v)
+        .map(|(_, v)| if v & 1 == 1 { v / 2 + 1 } else { v / 2 })
         .filter(|v| *v != 0)
         .collect::<Vec<_>>();
     vals.sort();
-    dbg!(&vals);
     println!("{}", vals[vals.len() - 1] - vals[0]);
+    println!("elapsed: {}", start_instant.elapsed().as_micros());
 }
