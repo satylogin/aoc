@@ -1,5 +1,18 @@
 use std::collections::BTreeMap;
 
+fn freq_map() -> BTreeMap<String, usize> {
+    let mut freq: BTreeMap<String, usize> = BTreeMap::new();
+    for i in 0..26 {
+        for j in 0..26 {
+            freq.insert(
+                format!("{}{}", ('A' as u8 + i) as char, ('A' as u8 + j) as char),
+                0,
+            );
+        }
+    }
+    freq
+}
+
 fn main() {
     let data = std::fs::read_to_string("input.txt").unwrap();
     let mut lines = data.split('\n').filter(|l| !l.is_empty());
@@ -13,28 +26,12 @@ fn main() {
             (base, to)
         })
         .collect::<BTreeMap<_, _>>();
-    let mut freq: BTreeMap<String, usize> = BTreeMap::new();
-    for i in 0..26 {
-        for j in 0..26 {
-            freq.insert(
-                format!("{}{}", ('A' as u8 + i) as char, ('A' as u8 + j) as char),
-                0,
-            );
-        }
-    }
+    let mut freq = freq_map();
     for i in 0..polymer.len() - 1 {
         *freq.get_mut(&polymer[i..=i + 1]).unwrap() += 1;
     }
     for _ in 0..40 {
-        let mut new_freq = BTreeMap::new();
-        for i in 0..26 {
-            for j in 0..26 {
-                new_freq.insert(
-                    format!("{}{}", ('A' as u8 + i) as char, ('A' as u8 + j) as char),
-                    0,
-                );
-            }
-        }
+        let mut new_freq = freq_map();
         for (k, v) in freq.iter() {
             if let Some(c) = conversions.get(k.as_str()) {
                 let k1 = format!("{}{}", k.chars().nth(0).unwrap(), c);
