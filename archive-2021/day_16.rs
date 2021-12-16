@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 fn main() {
-    let message = std::fs::read_to_string("input.txt").unwrap();
     let mapping = vec![
         ('0', "0000"),
         ('1', "0001"),
@@ -22,11 +21,12 @@ fn main() {
     ]
     .into_iter()
     .collect::<HashMap<char, &str>>();
-    let mut transformed = String::new();
-    for c in message.chars() {
-        transformed.push_str(mapping[&c]);
-    }
-    println!("{}", inspect(&transformed, 0).1);
+    let message = std::fs::read_to_string("input.txt")
+        .unwrap()
+        .chars()
+        .flat_map(|c| mapping[&c].chars())
+        .collect::<String>();
+    println!("{}", inspect(&message, 0).1);
 }
 
 fn inspect(encoded: &str, mut start: usize) -> (usize, i64) {
