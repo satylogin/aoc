@@ -1,30 +1,12 @@
-use std::collections::HashMap;
-
 fn main() {
-    let mapping = vec![
-        ('0', "0000"),
-        ('1', "0001"),
-        ('2', "0010"),
-        ('3', "0011"),
-        ('4', "0100"),
-        ('5', "0101"),
-        ('6', "0110"),
-        ('7', "0111"),
-        ('8', "1000"),
-        ('9', "1001"),
-        ('A', "1010"),
-        ('B', "1011"),
-        ('C', "1100"),
-        ('D', "1101"),
-        ('E', "1110"),
-        ('F', "1111"),
-    ]
-    .into_iter()
-    .collect::<HashMap<char, &str>>();
     let message = std::fs::read_to_string("input.txt")
         .unwrap()
         .chars()
-        .flat_map(|c| mapping[&c].chars())
+        .flat_map(|c| {
+            format!("{:04b}", u8::from_str_radix(&format!("{}", c), 16).unwrap())
+                .chars()
+                .collect::<Vec<_>>()
+        })
         .collect::<String>();
     println!("{}", inspect(&message, 0).1);
 }
