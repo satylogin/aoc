@@ -1,162 +1,122 @@
-#[derive(Default, Debug)]
 struct Node {
     data: i64,
-    parent: usize,
-    leaf: bool,
-    child: [usize; 2],
+    parent: *mut Node,
+    is_leaf: bool,
+    child: [*mut Node; 2],
 }
 
-struct Vault {
-    nodes: Vec<Node>,
+fn g_node(data: i64, parent: *mut Node, is_leaf: bool, child: [*mut Node; 2]) -> *mut Node {
+    Box::into_raw(Box::new(Node {
+        data,
+        parent,
+        is_leaf,
+        child,
+    }))
 }
 
-impl Vault {
-    fn new() -> Self {
-        Self {
-            nodes: vec![Node::default()],
-        }
-    }
-
-    fn allocate(&mut self) -> usize {
-        self.nodes.push(Node::default());
-        self.nodes.len() - 1
-    }
-
-    fn allocate_with(&mut self, data: i64, parent: usize, leaf: bool, child: [usize; 2]) -> usize {
-        self.nodes.push(Node {
-            data,
-            parent,
-            leaf,
-            child,
-        });
-        self.nodes.len() - 1
-    }
-
-    fn get(&mut self, idx: usize) -> &mut Node {
-        &mut self.nodes[idx]
-    }
-}
-
-fn split(id: usize, vault: &mut Vault) -> bool {
-    if vault.get(id).leaf {
-        if vault.get(id).data < 10 {
+fn split(node: *mut Node) -> bool {
+    if unsafe { &*node }.is_leaf {
+        let node_ref = unsafe { &mut *node };
+        if node_ref.data < 10 {
             return false;
         }
-        let data = vault.get(id).data;
-        let cid_1 = vault.allocate_with(data / 2, id, true, [0, 0]);
-        let cid_2 = vault.allocate_with(data - data / 2, id, true, [0, 0]);
-        let parent = vault.get(id).parent;
-        *vault.get(id) = Node {
-            data: 0,
-            parent,
-            leaf: false,
-            child: [cid_1, cid_2],
-        };
+        let data = node_ref.data;
+        node_ref.is_leaf = false;
+        node_ref.child = [
+            g_node(data / 2, node, true, [std::ptr::null_mut(); 2]),
+            g_node(data - data / 2, node, true, [std::ptr::null_mut(); 2]),
+        ];
         true
     } else {
-        split(vault.get(id).child[0], vault) || split(vault.get(id).child[1], vault)
+        split(unsafe { &*node }.child[0]) || split(unsafe { &*node }.child[1])
     }
 }
 
-fn explode(id: usize, depth: usize, vault: &mut Vault) -> bool {
-    if vault.get(id).leaf {
+fn explode(node: *mut Node, depth: usize) -> bool {
+    let node_ref = unsafe { &*node };
+    if node_ref.is_leaf {
         return false;
     }
-    if explode(vault.get(id).child[0], depth + 1, vault)
-        || explode(vault.get(id).child[1], depth + 1, vault)
-    {
+    if explode(node_ref.child[0], depth + 1) || explode(node_ref.child[1], depth + 1) {
         return true;
     }
     if depth < 4 {
         return false;
     }
     for i in [0, 1] {
-        let cid = vault.get(id).child[i];
-        let data = vault.get(cid).data;
-        let mut id = id;
-        let mut pid = vault.get(id).parent;
-        while pid != 0 && vault.get(pid).child[i] == id {
-            id = pid;
-            pid = vault.get(pid).parent;
+        let data = unsafe { &*node_ref.child[i] }.data;
+        let mut node = node;
+        let mut parent = unsafe { &*node }.parent;
+        while !parent.is_null() && unsafe { &*parent }.child[i] == node {
+            node = parent;
+            parent = unsafe { &*node }.parent;
         }
-        if pid != 0 {
-            id = vault.get(pid).child[i];
-            while !vault.get(id).leaf {
-                id = vault.get(id).child[1 - i];
+        if !parent.is_null() {
+            node = unsafe { &*parent }.child[i];
+            while !unsafe { &*node }.is_leaf {
+                node = unsafe { &*node }.child[1 - i];
             }
-            vault.get(id).data += data;
+            unsafe { &mut *node }.data += data;
         }
     }
-    vault.get(id).leaf = true;
-    vault.get(id).data = 0;
+    unsafe { &mut *node }.is_leaf = true;
+    unsafe { &mut *node }.data = 0;
     true
 }
 
-fn magnitude(id: usize, vault: &mut Vault) -> i64 {
-    if vault.get(id).leaf {
-        vault.get(id).data
+fn magnitude(node: &Node) -> i64 {
+    if node.is_leaf {
+        node.data
     } else {
-        3 * magnitude(vault.get(id).child[0], vault) + 2 * magnitude(vault.get(id).child[1], vault)
+        3 * magnitude(unsafe { &*node.child[0] }) + 2 * magnitude(unsafe { &*node.child[1] })
     }
 }
 
-fn parse(line: &str, vault: &mut Vault) -> usize {
-    let mut id = vault.allocate();
+fn parse(line: &str) -> *mut Node {
+    let mut root = g_node(0, std::ptr::null_mut(), false, [std::ptr::null_mut(); 2]);
     let mut stack = vec![];
     for c in line.chars() {
         match c {
             '[' => {
-                let nid = vault.allocate();
-                vault.get(nid).parent = id;
-                vault.get(id).child[0] = nid;
-                stack.push(id);
-                id = nid;
+                unsafe { &mut *root }.child[0] = g_node(0, root, false, [std::ptr::null_mut(); 2]);
+                stack.push(root);
+                root = unsafe { &mut *root }.child[0];
             }
             ',' => {
-                let nid = vault.allocate();
-                let pid = vault.get(id).parent;
-                vault.get(pid).child[1] = nid;
-                vault.get(nid).parent = pid;
-                id = nid;
+                let p = unsafe { &*root }.parent;
+                unsafe { &mut *p }.child[1] = g_node(0, p, false, [std::ptr::null_mut(); 2]);
+                root = unsafe { &mut *p }.child[1];
             }
-            ']' => {
-                id = stack.pop().unwrap();
-            }
+            ']' => root = stack.pop().unwrap(),
             d => {
-                vault.get(id).data = (d as u8 - '0' as u8) as i64;
-                vault.get(id).leaf = true;
+                unsafe { &mut *root }.data = (d as u8 - '0' as u8) as i64;
+                unsafe { &mut *root }.is_leaf = true;
             }
         }
     }
-    id
+    root
 }
 
-fn join(left: usize, right: usize, vault: &mut Vault) -> usize {
-    let pid = vault.allocate();
-    vault.get(pid).child = [left, right];
-    vault.get(left).parent = pid;
-    vault.get(right).parent = pid;
-    while explode(pid, 0, vault) || split(pid, vault) {}
-    pid
+fn join(left: *mut Node, right: *mut Node) -> *mut Node {
+    let node = g_node(0, std::ptr::null_mut(), false, [left, right]);
+    unsafe { &mut *left }.parent = node;
+    unsafe { &mut *right }.parent = node;
+    while explode(node, 0) || split(node) {}
+    node
 }
 
 fn main() {
     let data = std::fs::read_to_string("input.txt").unwrap();
     let lines = data.split('\n').collect::<Vec<_>>();
-    let mut max_magnitude = 0;
+    let mut max_mag = 0;
     for i in 0..lines.len() {
         for j in 0..lines.len() {
             if i == j {
                 continue;
             }
-            let mut vault = Vault::new();
-            let id = join(
-                parse(lines[i], &mut vault),
-                parse(lines[j], &mut vault),
-                &mut vault,
-            );
-            max_magnitude = std::cmp::max(max_magnitude, magnitude(id, &mut vault));
+            let node = join(parse(lines[i]), parse(lines[j]));
+            max_mag = std::cmp::max(max_mag, magnitude(unsafe { &*node }));
         }
     }
-    println!("{}", max_magnitude);
+    println!("{}", max_mag);
 }
