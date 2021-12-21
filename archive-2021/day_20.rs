@@ -67,9 +67,14 @@ fn main() {
         }
         std::mem::swap(&mut grid, &mut resolved);
         if s & 1 == 1 {
-            grid[0][0] = '.';
-            grid[0][m - 1] = '.';
-            grid[n - 1][0] = '.';
+            for i in 1..n {
+                grid[i][0] = '.';
+                grid[i][m - 1] = '.';
+            }
+            for j in 1..m {
+                grid[0][j] = '.';
+                grid[n - 1][j] = '.';
+            }
         }
     }
     let cnt = grid
