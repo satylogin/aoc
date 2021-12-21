@@ -67,11 +67,11 @@ fn main() {
         }
         std::mem::swap(&mut grid, &mut resolved);
         if s & 1 == 1 {
-            for i in 1..n {
+            for i in 0..n {
                 grid[i][0] = '.';
                 grid[i][m - 1] = '.';
             }
-            for j in 1..m {
+            for j in 0..m {
                 grid[0][j] = '.';
                 grid[n - 1][j] = '.';
             }
