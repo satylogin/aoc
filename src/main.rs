@@ -1,4 +1,5 @@
 use std::cmp::{max, min};
+use std::collections::HashMap;
 
 fn extract(s: &str) -> [i64; 2] {
     let r = s.split_once('=').unwrap().1.split_once("..").unwrap();
@@ -17,36 +18,12 @@ fn intersection(mut a: [[i64; 2]; 3], mut b: [[i64; 2]; 3]) -> Option<[[i64; 2];
     Some(a)
 }
 
-fn remove(mut from: [[i64; 2]; 3], to_remove: [[i64; 2]; 3]) -> Vec<[[i64; 2]; 3]> {
-    let mut slices = vec![];
-    if let Some(inter) = intersection(from, to_remove) {
-        for i in 0..3 {
-            let mut left = from;
-            if left[i][0] < inter[i][0] {
-                left[i][1] = inter[i][0] - 1;
-                slices.push(left);
-                from[i][0] = inter[i][0];
-            }
-
-            let mut right = from;
-            if right[i][1] > inter[i][1] {
-                right[i][0] = inter[i][1] + 1;
-                slices.push(right);
-                from[i][1] = inter[i][1];
-            }
-        }
-    } else {
-        slices.push(from);
-    }
-    slices
-}
-
 fn main() {
     let data = std::fs::read_to_string("input.txt").unwrap();
 
-    let mut cubes = vec![];
+    let mut weights = HashMap::new();
     for line in data.split('\n').filter(|l| !l.is_empty()) {
-        let mut new_cubes = vec![];
+        let mut new_weights = weights.clone();
         let (kind, coordinates) = line.split_once(' ').unwrap();
         let mut ranges = coordinates.split(',');
         let op_cube = [
@@ -54,17 +31,19 @@ fn main() {
             extract(ranges.next().unwrap()),
             extract(ranges.next().unwrap()),
         ];
-        for cube in cubes {
-            new_cubes.append(&mut remove(cube, op_cube));
+        for (cube, weight) in weights {
+            if let Some(intersection) = intersection(cube, op_cube) {
+                *new_weights.entry(intersection).or_insert(0) -= weight;
+            }
         }
         if kind == "on" {
-            new_cubes.push(op_cube);
+            *new_weights.entry(op_cube).or_insert(0) += 1;
         }
-        cubes = new_cubes;
+        weights = new_weights;
     }
-    let total = cubes
+    let total = weights
         .into_iter()
-        .map(|c| c.into_iter().map(|d| d[1] - d[0] + 1).product::<i64>())
+        .map(|(c, s)| c.into_iter().map(|d| d[1] - d[0] + 1).product::<i64>() * s)
         .sum::<i64>();
-    dbg!(total);
+    println!("{}", total);
 }
