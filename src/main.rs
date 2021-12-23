@@ -1,136 +1,150 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
-fn weight(c: char) -> usize {
-    match c {
-        'A' => 1,
-        'B' => 10,
-        'C' => 100,
-        'D' => 1000,
-        _ => unreachable!(),
+const WEIGHT: [i64; 4] = [1, 10, 100, 1000];
+const BUF_WEIGHT: [i64; 7] = [0, 1, 3, 5, 7, 9, 10];
+
+fn weight(c: char) -> i64 {
+    WEIGHT[(c as u8 - 'A' as u8) as usize]
+}
+
+fn buf_traversal_cost(i: usize, j: usize, c: char) -> i64 {
+    (BUF_WEIGHT[i] - BUF_WEIGHT[j]).abs() * WEIGHT[(c as u8 - 'A' as u8) as usize]
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct State {
+    r: [Vec<char>; 4],
+    b: [char; 7],
+}
+
+impl State {
+    fn is_valid_room(&self, i: usize) -> bool {
+        self.r[i]
+            .iter()
+            .all(|&c| i == (c as u8 - 'A' as u8) as usize)
     }
-}
 
-fn room(c: char) -> usize {
-    (c as u8 - 'A' as u8 + 1) as usize * 2 + 1
-}
-
-fn room_for(r: usize) -> char {
-    ((r / 2 - 1) as u8 + 'A' as u8) as char
-}
-
-fn can_reach(grid: &Vec<Vec<char>>, i: usize, j: usize) -> Vec<Vec<bool>> {
-    let mut vis = vec![vec![false; grid[0].len()]; grid.len()];
-    let mut q = VecDeque::new();
-    vis[i][j] = true;
-    q.push_back((i, j));
-    while let Some((x, y)) = q.pop_front() {
-        for (a, b) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] {
-            if !vis[a][b] && (grid[a][b] == '.' || grid[a][b] == grid[i][j]) {
-                vis[a][b] = true;
-                q.push_back((a, b));
-            }
-        }
+    fn entry_cost(&self, i: usize) -> i64 {
+        (4 - self.r[i].len()) as i64 * WEIGHT[i]
     }
-    vis
-}
 
-fn transitions(grid: Vec<Vec<char>>, cost: usize) -> Vec<(Vec<Vec<char>>, usize)> {
-    let is_valid_room = |r: usize, c: char| (2..=5).all(|i| grid[i][r] == '.' || grid[i][r] == c);
-    let mut transitions = vec![];
-    // check all those we can come out of room.
-    for j in [3, 5, 7, 9] {
-        if is_valid_room(j, room_for(j)) {
-            continue;
-        }
-        for i in 2..=5 {
-            if grid[i][j] == '.' {
+    fn exit_cost(&self, i: usize, c: char) -> i64 {
+        (4 - self.r[i].len()) as i64 * weight(c)
+    }
+
+    fn transition_room_to_buffer(&self) -> Vec<(State, i64)> {
+        let mut res = vec![];
+        for i in 0..4 {
+            if self.is_valid_room(i) {
                 continue;
             }
-            let can_reach = can_reach(&grid, i, j);
-            for k in 1..grid[0].len() - 1 {
-                if can_reach[1][k] && ![3, 5, 7, 9].contains(&k) {
-                    let c =
-                        cost + (i - 1 + (j as i32 - k as i32).abs() as usize) * weight(grid[i][j]);
-                    let mut t = grid.clone();
-                    t[1][k] = grid[i][j];
-                    t[i][j] = '.';
-                    transitions.push((t, c));
+            let mut next = self.clone();
+            let c = next.r[i].pop().unwrap();
+            for j in (0..=i + 1).rev() {
+                let cost = buf_traversal_cost(j, i + 1, c) + weight(c) + next.exit_cost(i, c);
+                if next.b[j] == '.' {
+                    next.b[j] = c;
+                    res.push((next.clone(), cost));
+                    next.b[j] = '.';
+                } else {
+                    break;
                 }
             }
-            break;
-        }
-    }
-    // check all those who can go into their room
-    for j in 1..grid[0].len() - 1 {
-        if !grid[1][j].is_alphabetic() {
-            continue;
-        }
-        let r = room(grid[1][j]);
-        if !is_valid_room(r, room_for(r)) {
-            continue;
-        }
-        let can_reach = can_reach(&grid, 1, j);
-        for k in (2..=5).rev() {
-            if grid[k][r] == '.' && can_reach[k][r] {
-                let c = cost + (k - 1 + (j as i32 - r as i32).abs() as usize) * weight(grid[1][j]);
-                let mut t = grid.clone();
-                t[k][r] = grid[1][j];
-                t[1][j] = '.';
-                transitions.push((t, c));
-                break;
+            for j in i + 2..7 {
+                let cost = buf_traversal_cost(i + 2, j, c) + weight(c) + next.exit_cost(i, c);
+                if next.b[j] == '.' {
+                    next.b[j] = c;
+                    res.push((next.clone(), cost));
+                    next.b[j] = '.';
+                } else {
+                    break;
+                }
             }
         }
+        res
     }
 
-    transitions
+    fn transition_buffer_to_room(&self) -> Vec<(State, i64)> {
+        let mut res = vec![];
+        for i in 0..7 {
+            if self.b[i] == '.' {
+                continue;
+            }
+            let r = (self.b[i] as u8 - 'A' as u8) as usize;
+            if !self.is_valid_room(r) {
+                continue;
+            }
+            if i <= r + 1 {
+                if (i + 1..=r + 1).all(|i| self.b[i] == '.') {
+                    let mut next = self.clone();
+                    let c = buf_traversal_cost(i, r + 1, next.b[i])
+                        + weight(next.b[i])
+                        + self.entry_cost(r);
+                    next.r[r].push(next.b[i]);
+                    next.b[i] = '.';
+                    res.push((next, c));
+                }
+            } else {
+                if (r + 2..i).all(|i| self.b[i] == '.') {
+                    let mut next = self.clone();
+                    let c = buf_traversal_cost(r + 2, i, next.b[i])
+                        + weight(next.b[i])
+                        + self.entry_cost(r);
+                    next.r[r].push(next.b[i]);
+                    next.b[i] = '.';
+                    res.push((next, c));
+                }
+            }
+        }
+        res
+    }
+
+    fn transitions(&self) -> Vec<(State, i64)> {
+        let mut res = self.transition_room_to_buffer();
+        res.append(&mut self.transition_buffer_to_room());
+        res
+    }
 }
 
 fn main() {
-    let grid = std::fs::read_to_string("input.txt")
-        .unwrap()
-        .split('\n')
-        .filter(|l| !l.is_empty())
-        .map(|l| l.chars().collect::<Vec<_>>())
-        .collect::<Vec<_>>();
-    let expected = [
-        "#############",
-        "#...........#",
-        "###A#B#C#D###",
-        "  #A#B#C#D#",
-        "  #A#B#C#D#",
-        "  #A#B#C#D#",
-        "  #########",
-    ]
-    .into_iter()
-    .map(|l| l.chars().collect::<Vec<_>>())
-    .collect::<Vec<_>>();
-
+    let input = State {
+        r: [
+            vec!['C', 'D', 'D', 'D'],
+            vec!['A', 'B', 'C', 'D'],
+            vec!['B', 'A', 'B', 'B'],
+            vec!['C', 'C', 'A', 'A'],
+        ],
+        b: ['.'; 7],
+    };
+    let expected = State {
+        r: [
+            vec!['A', 'A', 'A', 'A'],
+            vec!['B', 'B', 'B', 'B'],
+            vec!['C', 'C', 'C', 'C'],
+            vec!['D', 'D', 'D', 'D'],
+        ],
+        b: ['.'; 7],
+    };
     let mut costs = HashMap::new();
     let mut q = std::collections::BinaryHeap::new();
-    costs.insert(grid.clone(), 0);
-    q.push((0, grid));
-    let mut cnt = 0;
+    costs.insert(input.clone(), 0);
+    q.push((0, input));
     while let Some((cost, grid)) = q.pop() {
-        cnt += 1;
-        if cnt % 100000 == 0 {
-            for r in &grid {
-                println!("{:?}", r.iter().collect::<String>());
-            }
-            println!("cost: {}", cost);
-        }
-        let cost = (-cost) as usize;
+        let cost = -cost;
         if cost != costs[&grid] {
             continue;
         }
         if grid == expected {
             break;
         }
-        for (transition, t_cost) in transitions(grid, cost) {
-            if costs.contains_key(&transition) && costs[&transition] <= t_cost {
-                continue;
+        for (transition, t_cost) in grid.transitions() {
+            if let Some(&c) = costs.get(&transition) {
+                if c <= t_cost + cost {
+                    continue;
+                }
             }
-            costs.insert(transition.clone(), t_cost);
-            q.push((-(t_cost as i64), transition));
+            costs.insert(transition.clone(), t_cost + cost);
+            q.push((-(t_cost + cost), transition));
         }
     }
     dbg!(costs.get(&expected));

@@ -1,49 +1,151 @@
-use std::cmp::{max, min};
 use std::collections::HashMap;
 
-fn extract(s: &str) -> [i64; 2] {
-    let r = s.split_once('=').unwrap().1.split_once("..").unwrap();
-    [r.0.parse().unwrap(), r.1.parse().unwrap()]
+const WEIGHT: [i64; 4] = [1, 10, 100, 1000];
+const BUF_WEIGHT: [i64; 7] = [0, 1, 3, 5, 7, 9, 10];
+
+fn weight(c: char) -> i64 {
+    WEIGHT[(c as u8 - 'A' as u8) as usize]
 }
 
-fn intersection(mut a: [[i64; 2]; 3], mut b: [[i64; 2]; 3]) -> Option<[[i64; 2]; 3]> {
-    for i in 0..3 {
-        let (l, r) = (max(a[i][0], b[i][0]), min(a[i][1], b[i][1]));
-        if l > r {
-            return None;
-        }
-        a[i] = [l, r];
-        b[i] = [l, r];
+fn buf_traversal_cost(i: usize, j: usize, c: char) -> i64 {
+    (BUF_WEIGHT[i] - BUF_WEIGHT[j]).abs() * WEIGHT[(c as u8 - 'A' as u8) as usize]
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct State {
+    r: [Vec<char>; 4],
+    b: [char; 7],
+}
+
+impl State {
+    fn is_valid_room(&self, i: usize) -> bool {
+        self.r[i]
+            .iter()
+            .all(|&c| i == (c as u8 - 'A' as u8) as usize)
     }
-    Some(a)
+
+    fn entry_cost(&self, i: usize) -> i64 {
+        (4 - self.r[i].len()) as i64 * WEIGHT[i]
+    }
+
+    fn exit_cost(&self, i: usize, c: char) -> i64 {
+        (4 - self.r[i].len()) as i64 * weight(c)
+    }
+
+    fn transition_room_to_buffer(&self) -> Vec<(State, i64)> {
+        let mut res = vec![];
+        for i in 0..4 {
+            if self.is_valid_room(i) {
+                continue;
+            }
+            let mut next = self.clone();
+            let c = next.r[i].pop().unwrap();
+            for j in (0..=i + 1).rev() {
+                let cost = buf_traversal_cost(j, i + 1, c) + weight(c) + next.exit_cost(i, c);
+                if next.b[j] == '.' {
+                    next.b[j] = c;
+                    res.push((next.clone(), cost));
+                    next.b[j] = '.';
+                } else {
+                    break;
+                }
+            }
+            for j in i + 2..7 {
+                let cost = buf_traversal_cost(i + 2, j, c) + weight(c) + next.exit_cost(i, c);
+                if next.b[j] == '.' {
+                    next.b[j] = c;
+                    res.push((next.clone(), cost));
+                    next.b[j] = '.';
+                } else {
+                    break;
+                }
+            }
+        }
+        res
+    }
+
+    fn transition_buffer_to_room(&self) -> Vec<(State, i64)> {
+        let mut res = vec![];
+        for i in 0..7 {
+            if self.b[i] == '.' {
+                continue;
+            }
+            let r = (self.b[i] as u8 - 'A' as u8) as usize;
+            if !self.is_valid_room(r) {
+                continue;
+            }
+            if i <= r + 1 {
+                if (i + 1..=r + 1).all(|i| self.b[i] == '.') {
+                    let mut next = self.clone();
+                    let c = buf_traversal_cost(i, r + 1, next.b[i])
+                        + weight(next.b[i])
+                        + self.entry_cost(r);
+                    next.r[r].push(next.b[i]);
+                    next.b[i] = '.';
+                    res.push((next, c));
+                }
+            } else {
+                if (r + 2..i).all(|i| self.b[i] == '.') {
+                    let mut next = self.clone();
+                    let c = buf_traversal_cost(r + 2, i, next.b[i])
+                        + weight(next.b[i])
+                        + self.entry_cost(r);
+                    next.r[r].push(next.b[i]);
+                    next.b[i] = '.';
+                    res.push((next, c));
+                }
+            }
+        }
+        res
+    }
+
+    fn transitions(&self) -> Vec<(State, i64)> {
+        let mut res = self.transition_room_to_buffer();
+        res.append(&mut self.transition_buffer_to_room());
+        res
+    }
 }
 
 fn main() {
-    let data = std::fs::read_to_string("input.txt").unwrap();
-
-    let mut weights = HashMap::new();
-    for line in data.split('\n').filter(|l| !l.is_empty()) {
-        let mut new_weights = weights.clone();
-        let (kind, coordinates) = line.split_once(' ').unwrap();
-        let mut ranges = coordinates.split(',');
-        let op_cube = [
-            extract(ranges.next().unwrap()),
-            extract(ranges.next().unwrap()),
-            extract(ranges.next().unwrap()),
-        ];
-        for (cube, weight) in weights {
-            if let Some(intersection) = intersection(cube, op_cube) {
-                *new_weights.entry(intersection).or_insert(0) -= weight;
+    let input = State {
+        r: [
+            vec!['C', 'D', 'D', 'D'],
+            vec!['A', 'B', 'C', 'D'],
+            vec!['B', 'A', 'B', 'B'],
+            vec!['C', 'C', 'A', 'A'],
+        ],
+        b: ['.'; 7],
+    };
+    let expected = State {
+        r: [
+            vec!['A', 'A', 'A', 'A'],
+            vec!['B', 'B', 'B', 'B'],
+            vec!['C', 'C', 'C', 'C'],
+            vec!['D', 'D', 'D', 'D'],
+        ],
+        b: ['.'; 7],
+    };
+    let mut costs = HashMap::new();
+    let mut q = std::collections::BinaryHeap::new();
+    costs.insert(input.clone(), 0);
+    q.push((0, input));
+    while let Some((cost, grid)) = q.pop() {
+        let cost = -cost;
+        if cost != costs[&grid] {
+            continue;
+        }
+        if grid == expected {
+            break;
+        }
+        for (transition, t_cost) in grid.transitions() {
+            if let Some(&c) = costs.get(&transition) {
+                if c <= t_cost + cost {
+                    continue;
+                }
             }
+            costs.insert(transition.clone(), t_cost + cost);
+            q.push((-(t_cost + cost), transition));
         }
-        if kind == "on" {
-            *new_weights.entry(op_cube).or_insert(0) += 1;
-        }
-        weights = new_weights;
     }
-    let total = weights
-        .into_iter()
-        .map(|(c, s)| c.into_iter().map(|d| d[1] - d[0] + 1).product::<i64>() * s)
-        .sum::<i64>();
-    println!("{}", total);
+    dbg!(costs.get(&expected));
 }
