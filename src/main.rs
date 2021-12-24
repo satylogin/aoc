@@ -3,7 +3,7 @@ use std::collections::HashMap;
 static mut NUMS: [[i64; 3]; 14] = [[0; 3]; 14];
 
 struct DP {
-    mem: HashMap<(usize, i64), i64>,
+    mem: [HashMap<i64, i64>; 14],
 }
 
 impl DP {
@@ -11,7 +11,7 @@ impl DP {
         if step == 14 {
             return if z == 0 { 0 } else { -1 };
         }
-        if let Some(&n) = self.mem.get(&(step, z)) {
+        if let Some(&n) = self.mem[step].get(&z) {
             return n;
         }
         let [a, b, c] = unsafe { NUMS[step] };
@@ -25,7 +25,7 @@ impl DP {
                 break;
             }
         }
-        self.mem.insert((step, z), num);
+        self.mem[step].insert(z, num);
         num
     }
 }
@@ -42,15 +42,12 @@ fn main() {
                 .map(|n| ins[n].split(' ').nth(2).unwrap().parse::<i64>().unwrap());
         }
     }
-    let num = format!(
-        "{}",
-        DP {
-            mem: HashMap::new(),
-        }
-        .solve(0, 0)
-    )
-    .chars()
-    .rev()
-    .collect::<String>();
+    let mut dp = DP {
+        mem: [(); 14].map(|_| HashMap::new()),
+    };
+    let num = format!("{}", dp.solve(0, 0))
+        .chars()
+        .rev()
+        .collect::<String>();
     println!("{}", num);
 }
