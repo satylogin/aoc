@@ -1,5 +1,6 @@
 fn main() {
     for file in ["test.txt", "test2.txt", "input.txt"] {
+        let now = std::time::Instant::now();
         let moves = std::fs::read_to_string(file)
             .unwrap()
             .split('\n')
@@ -9,7 +10,8 @@ fn main() {
                 (dir.chars().next().unwrap(), steps.parse::<usize>().unwrap())
             })
             .collect::<Vec<_>>();
-        dbg!(visited(&moves, 10));
+        println!("{}", visited(&moves, 10));
+        println!("Elapsed: {}us", now.elapsed().as_micros());
     }
 }
 
