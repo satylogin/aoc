@@ -1,6 +1,6 @@
-struct Monkey<'expression> {
+struct Monkey {
     items: Vec<i64>,
-    expression: &'expression str,
+    expression: Expression,
     test: Test,
 }
 
@@ -10,20 +10,36 @@ struct Test {
     if_false: usize,
 }
 
-fn operation(old: i64, expression: &str) -> i64 {
-    let expression = expression.split(' ').collect::<Vec<_>>();
-    let op1 = match expression[0] {
-        "old" => old,
-        num => num.parse::<i64>().unwrap(),
-    };
-    let op2 = match expression[2] {
-        "old" => old,
-        num => num.parse::<i64>().unwrap(),
-    };
-    match expression[1] {
-        "+" => op1 + op2,
-        "*" => op1 * op2,
-        _ => unreachable!(),
+enum Operation {
+    Mul,
+    Add,
+}
+
+struct Expression {
+    operands: Vec<Option<i64>>,
+    operation: Operation,
+}
+
+impl Expression {
+    fn new(expression: &str) -> Self {
+        let e = expression.split(' ').collect::<Vec<_>>();
+        Self {
+            operands: vec![e[0].parse::<i64>().ok(), e[2].parse::<i64>().ok()],
+            operation: match e[1] {
+                "+" => Operation::Add,
+                "*" => Operation::Mul,
+                _ => unreachable!(),
+            },
+        }
+    }
+
+    fn apply(self: &Self, old: i64) -> i64 {
+        let a = self.operands[0].unwrap_or(old);
+        let b = self.operands[1].unwrap_or(old);
+        match self.operation {
+            Operation::Add => a + b,
+            Operation::Mul => a * b,
+        }
     }
 }
 
@@ -34,7 +50,7 @@ fn count_inspection(monkeys: &mut Vec<Monkey>, modulo: i64) -> usize {
             count[m] += monkeys[m].items.len();
             let items = monkeys[m].items.clone();
             for old in items {
-                let new = operation(old, monkeys[m].expression) % modulo;
+                let new = monkeys[m].expression.apply(old) % modulo;
                 let to_monkey = if new % monkeys[m].test.div_by == 0 {
                     monkeys[m].test.if_true
                 } else {
@@ -52,6 +68,7 @@ fn count_inspection(monkeys: &mut Vec<Monkey>, modulo: i64) -> usize {
 fn main() {
     let last_num = |l: &str| l.split(' ').last().unwrap().parse::<i64>().unwrap();
     for input in ["test.txt", "input.txt"] {
+        let now = std::time::Instant::now();
         let mut monkeys = vec![];
         let lines = std::fs::read_to_string(input).unwrap();
         let lines = lines.split('\n').collect::<Vec<_>>();
@@ -68,7 +85,7 @@ fn main() {
                     .split(',')
                     .map(|num| num.trim().parse::<i64>().unwrap() % modulo)
                     .collect::<Vec<_>>(),
-                expression: lines[i + 2].split_once('=').unwrap().1.trim(),
+                expression: Expression::new(lines[i + 2].split_once('=').unwrap().1.trim()),
                 test: Test {
                     div_by: last_num(lines[i + 3]),
                     if_true: last_num(lines[i + 4]) as usize,
@@ -77,5 +94,6 @@ fn main() {
             });
         }
         println!("{}", count_inspection(&mut monkeys, modulo));
+        println!("elapsed: {}ms", now.elapsed().as_millis());
     }
 }
